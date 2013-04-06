@@ -1,44 +1,39 @@
 require "bundler"
 Bundler::GemHelper.install_tasks
 require "json"
-require "tilt"
+require "jasmine"
 
 Dir["#{File.dirname(__FILE__)}/tasks/**/*.rb"].each do |file|
   require file
 end
 
-desc "Run all Jasmine JS specs"
-task :jasmine_specs do
-  jasmine_dev = JasmineDev.new
-
-  return unless jasmine_dev.node_installed?
-
-  system "thor jasmine_dev:execute_specs"
-
-  puts "\n\033[33m>>> DEPRECATED <<< Run Jasmine's JavaScript specs with 'thor jasmine_dev:execute_specs'\n\033[0m"
+# TODO: Is there better way to invoke this using Jasmine gem???
+task :core_spec do
+  exec "ruby spec/jasmine_self_test_spec.rb"
 end
 
-desc "Run all Jasmine core tests (JavaScript and dev tasks)"
-task :spec => :require_pages_submodule do
-  jasmine_dev = JasmineDev.new
+namespace :jasmine do
+  task :server do
+    port = ENV['JASMINE_PORT'] || 8888
+    jasmine_yml = ENV['JASMINE_YML'] || 'jasmine.yml'
+    Jasmine.load_configuration_from_yaml(File.join(Dir.pwd, 'spec', jasmine_yml))
+    config = Jasmine.config
+    server = Jasmine::Server.new(port, Jasmine::Application.app(config))
+    server.start
 
-  return unless jasmine_dev.node_installed?
+    puts "your tests are here:"
+    puts "  http://localhost:#{port}/"
+  end
 
-  system "rspec"
-end
+  desc "Copy examples from Jasmine JS to the gem"
+  task :copy_examples_to_gem do
+    require "fileutils"
 
-task :require_pages_submodule do
-  jasmine_dev = JasmineDev.new
-
-  unless jasmine_dev.pages_submodule_installed?
-    puts 'Installing the Github pages submodule:'
-    system 'git submodule update --init'
-    puts 'Now continuing...'
+    # copy jasmine's example tree into our generator templates dir
+    FileUtils.rm_r('generators/jasmine/templates/jasmine-example', :force => true)
+    FileUtils.cp_r(File.join(Jasmine::Core.path, 'example'), 'generators/jasmine/templates/jasmine-example', :preserve => true)
   end
 end
 
-desc "View full development tasks"
-task :list_dev_tasks do
-  puts "Jasmine uses Thor for command line tasks for development. Here is the command set:"
-  system "thor list"
-end
+desc "Run specs via server"
+task :jasmine => ['jasmine:server']
